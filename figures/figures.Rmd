@@ -99,23 +99,36 @@ model_data %>%
            ((orig_param_values - param_value) / orig_param_values)) %>%
   select(complex, orig_param_value = orig_param_values, adjustment, param_value,
          orig_ATP, ATP, sof) -> sof
+# write_csv(sof, 'sof_results_all.csv')
 
 # find largest absolute value of sensitivity for each complex
 sof %>% 
   arrange(desc(abs(sof))) %>%
   group_by(complex) %>%
-  top_n(1)
+  top_n(1) -> max_sof
+# write_csv(max_sof, 'max_sof_results_per_complex.csv')
 ```
 
 ### Paper Table
 
 ```{r}
+# all sof results
 sof %>%
   select(adjustment, complex, sof) %>%
+  mutate(sof = round(sof, 2)) %>%
   pivot_wider(names_from = complex, values_from = sof) %>%
   gt() %>%
   tab_header(title = "Sensitive Objective Function Results") -> gt_tbl
-gtsave(gt_tbl, 'sof_results_all.png')
+# gtsave(gt_tbl, 'sof_results_all.png')
+
+# maximum sof by complex
+max_sof %>%
+  select(complex, adjustment, max_sof = sof) %>%
+  arrange(max_sof) %>%
+  mutate(max_sof = round(max_sof, 2)) %>%
+  gt(row_group_as_column = T) %>%
+  tab_header(title = "Maximum SOF") -> max_gt_tbl
+# gtsave(max_gt_tbl, 'max_sof_results_per_complex.png')
 ```
 
 
