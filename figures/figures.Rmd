@@ -7,7 +7,8 @@ date: "2024-03-09"
 library(tidyverse)
 library(vroom)
 library(simplecolors)
-# library(patchwork)
+library(ggrepel)
+library(gt)
 
 knitr::opts_chunk$set(echo = TRUE)
 ```
@@ -17,35 +18,107 @@ knitr::opts_chunk$set(echo = TRUE)
 ## Read / Wrangle Data
 
 ```{r}
-vroom('../original_results.csv') %>%
-  mutate(complex = 'original') -> original
+# read in original parameter values
+vroom('../model/original_parameter_values.csv') -> original_parameters
 
-vroom('../complexI_results.csv') -> c1
-  # select(-time) %>%
-  # mutate(time = rep(original$time, 11)) -> c1
+# read in results of original simulation and duplicate four times to combine
+# with each of the four mito complex simulations
+vroom('../model/results/original_results.csv') -> original
+rbind(mutate(original, complex = 'Original', facet = 'Complex I'),
+      mutate(original, complex = 'Original', facet = 'Complex III'),
+      mutate(original, complex = 'Original', facet = 'Complex IV'),
+      mutate(original, complex = 'Original', facet = 'Complex V')) -> original_expanded
 
-bind_rows(original, c1) -> comb
+# read in mito complex model results and combine with original results
+list.files(path = '../model/results',
+           pattern = 'complex',
+           full.names = T) -> model_result_files
 
-# c1 %>%
-#   filter(!(time %in% original$time))
-# 
-# c1 %>%
-# ggplot(aes(x = ATP, color = as.factor(param_value))) +
-#   geom_density()
+vroom(model_result_files) %>%
+  mutate(facet = complex) %>%
+  bind_rows(original_expanded) %>%
+  mutate(complex = factor(complex, levels = c('Original', 'Complex I', 
+                                              'Complex III', 'Complex IV', 
+                                              'Complex V'))) -> model_data
 ```
 
-## Plots
+## Plot Results
+
+```{r, fig.width = 10, fig.height = 8}
+# make labels for interesting perturbations
+model_data %>%
+  filter((complex == 'Complex I' & adjustment == 0.5) |
+           (complex == 'Complex III' & adjustment %in% c(0.15, 0.2)) |
+           (complex == 'Complex IV' & adjustment == 0.35)) %>%
+  distinct(facet, complex, adjustment, param_value) %>%
+  mutate(time = case_when(complex == 'Complex III' & 
+                            adjustment == 0.15 ~ 9.483818e-06,
+                          complex == 'Complex III' & 
+                            adjustment == 0.2 ~ 1.968597e-05,
+                          complex == 'Complex IV' ~ 1.214085e-05,
+                          complex == 'Complex I' ~ 1.214085e-05),
+         ATP = case_when(complex == 'Complex III' & 
+                            adjustment == 0.15 ~ 1.294265e-04,
+                          complex == 'Complex III' & 
+                            adjustment == 0.2 ~ 1.681413e-04,
+                          complex == 'Complex IV' ~ 1.411292e-04,
+                          complex == 'Complex I' ~ 1.416017e-04),
+         label = paste0(round(adjustment * 100), '%')) -> labels
+
+# plot
+model_data %>%
+ggplot(aes(x = time, y = ATP, group = as.factor(param_value))) +
+  geom_line(aes(color = complex)) +
+  scale_color_manual(values = simplecolors::sc('grey5', 'orange3', 
+                                               'mutedyellow3', 'mutedblue3',
+                                               'mutedviolet3'),
+                     name = 'Model') +
+  ggrepel::geom_text_repel(data = labels, aes(label = label)) + # c1 0.5, c3 0.2 and 0.15, c5 0.35
+  facet_wrap(~ facet) +
+  labs(x = 'Time (s)', y = 'ATP Concentration (mols/sM)') +
+  theme_bw(base_size = 16)
+# ggsave('model_results_plot.png')
+```
+
+## Sensitivity
+
+SOF = (% change in outcome) / (% change of rate) = ((orig_res - new_res) / orig_res) / ((orig_rate - new_rate) / orig_rate)
+
+### Calculate
 
 ```{r}
-comb %>%
-  mutate(facet = 'Complex I') %>%
+# get ATP value from original data
+original %>% 
+  filter(time == max(time)) -> orig_final_atp
 
-ggplot(aes(x = time, y = ATP, color = complex, group = as.factor(param_value))) +
-  geom_line() +
-  scale_color_manual(values = simplecolors::sc('orange3', 'grey5'),
-                     name = 'Model') +
-  labs(x = 'Time (s)', y = 'ATP Concentration (mols/sM)')
-  theme_bw(base_size = 16)
+model_data %>%
+  filter(time == max(time), complex != 'Original') %>%
+  left_join(original_parameters, by = join_by(complex)) %>%
+  mutate(orig_ATP = orig_final_atp$ATP,
+         sof = ((orig_ATP - ATP) / orig_ATP) / 
+           ((orig_param_values - param_value) / orig_param_values)) %>%
+  select(complex, orig_param_value = orig_param_values, adjustment, param_value,
+         orig_ATP, ATP, sof) -> sof
+
+# find largest absolute value of sensitivity for each complex
+sof %>% 
+  arrange(desc(abs(sof))) %>%
+  group_by(complex) %>%
+  top_n(1)
 ```
 
+### Paper Table
+
+```{r}
+sof %>%
+  select(adjustment, complex, sof) %>%
+  pivot_wider(names_from = complex, values_from = sof) %>%
+  gt() %>%
+  tab_header(title = "Sensitive Objective Function Results") -> gt_tbl
+gtsave(gt_tbl, 'sof_results_all.png')
+```
+
+
+
+<br>
 
