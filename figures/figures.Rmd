@@ -1,0 +1,51 @@
+---
+output: html_document
+date: "2024-03-09"
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(vroom)
+library(simplecolors)
+# library(patchwork)
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# BMES511 Final Project Figures
+
+## Read / Wrangle Data
+
+```{r}
+vroom('../original_results.csv') %>%
+  mutate(complex = 'original') -> original
+
+vroom('../complexI_results.csv') -> c1
+  # select(-time) %>%
+  # mutate(time = rep(original$time, 11)) -> c1
+
+bind_rows(original, c1) -> comb
+
+# c1 %>%
+#   filter(!(time %in% original$time))
+# 
+# c1 %>%
+# ggplot(aes(x = ATP, color = as.factor(param_value))) +
+#   geom_density()
+```
+
+## Plots
+
+```{r}
+comb %>%
+  mutate(facet = 'Complex I') %>%
+
+ggplot(aes(x = time, y = ATP, color = complex, group = as.factor(param_value))) +
+  geom_line() +
+  scale_color_manual(values = simplecolors::sc('orange3', 'grey5'),
+                     name = 'Model') +
+  labs(x = 'Time (s)', y = 'ATP Concentration (mols/sM)')
+  theme_bw(base_size = 16)
+```
+
+
