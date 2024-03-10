@@ -1,23 +1,13 @@
----
-output: html_document
-date: "2024-03-09"
----
 
-```{r setup, include=FALSE}
 library(tidyverse)
 library(vroom)
 library(simplecolors)
 library(ggrepel)
 library(gt)
 
-knitr::opts_chunk$set(echo = TRUE)
-```
-
 # BMES511 Final Project Figures
 
 ## Read / Wrangle Data
-
-```{r}
 # read in original parameter values
 vroom('../model/original_parameter_values.csv') -> original_parameters
 
@@ -40,11 +30,8 @@ vroom(model_result_files) %>%
   mutate(complex = factor(complex, levels = c('Original', 'Complex I', 
                                               'Complex III', 'Complex IV', 
                                               'Complex V'))) -> model_data
-```
 
 ## Plot Results
-
-```{r, fig.width = 10, fig.height = 8}
 # make labels for interesting perturbations
 model_data %>%
   filter((complex == 'Complex I' & adjustment == 0.5) |
@@ -78,15 +65,13 @@ ggplot(aes(x = time, y = ATP, group = as.factor(param_value))) +
   labs(x = 'Time (s)', y = 'ATP Concentration (mM)') +
   theme_bw(base_size = 16)
 # ggsave('model_results_plot.png')
-```
+
 
 ## Sensitivity
 
-SOF = (% change in outcome) / (% change of rate) = ((orig_res - new_res) / orig_res) / ((orig_rate - new_rate) / orig_rate)
+# SOF = (% change in outcome) / (% change of rate) = ((orig_res - new_res) / orig_res) / ((orig_rate - new_rate) / orig_rate)
 
 ### Calculate
-
-```{r}
 # get ATP value from original data
 original %>% 
   filter(time == max(time)) -> orig_final_atp
@@ -107,11 +92,8 @@ sof %>%
   group_by(complex) %>%
   top_n(1) -> max_sof
 # write_csv(max_sof, 'max_sof_results_per_complex.csv')
-```
 
-### Paper Table
-
-```{r}
+### Paper Table(s)
 # all sof results
 sof %>%
   select(adjustment, complex, sof) %>%
@@ -129,9 +111,5 @@ max_sof %>%
   gt(row_group_as_column = T) %>%
   tab_header(title = "Maximum SOF") -> max_gt_tbl
 # gtsave(max_gt_tbl, 'max_sof_results_per_complex.png')
-```
 
-
-
-<br>
 
